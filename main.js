@@ -11,11 +11,11 @@
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled      = true;
-  renderer.shadowMap.type         = THREE.PCFSoftShadowMap;
-  renderer.outputEncoding         = THREE.sRGBEncoding;
-  renderer.toneMapping            = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure    = 1.1;
+  renderer.shadowMap.enabled     = true;
+  renderer.shadowMap.type        = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding        = THREE.sRGBEncoding;
+  renderer.toneMapping           = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure   = 1.1;
 
   const scene  = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 2000);
@@ -36,16 +36,15 @@
     sun.castShadow = true;
     sun.shadow.mapSize.width  = 2048;
     sun.shadow.mapSize.height = 2048;
-    sun.shadow.camera.near   = 0.5;
-    sun.shadow.camera.far    = 500;
-    sun.shadow.camera.left   = sun.shadow.camera.bottom = -80;
-    sun.shadow.camera.right  = sun.shadow.camera.top   =  80;
-    sun.shadow.bias          = -0.002;
+    sun.shadow.camera.near = 0.5;
+    sun.shadow.camera.far  = 500;
+    sun.shadow.camera.left = sun.shadow.camera.bottom = -80;
+    sun.shadow.camera.right = sun.shadow.camera.top   =  80;
+    sun.shadow.bias = -0.002;
     scene.add(sun);
 
     scene.add(new THREE.HemisphereLight(0x6688cc, 0x443322, 0.5));
 
-    // Trackside spotlights every 120 m
     for (let z = 0; z < 800; z += 120) {
       for (const sx of [-10, 10]) {
         const spot = new THREE.SpotLight(0xffffff, 1.5, 80, Math.PI / 6, 0.4);
@@ -60,10 +59,8 @@
 
   /* ═══════════ SKY ═══════════ */
   function setupSky() {
-    const skyGeo = new THREE.SphereGeometry(900, 32, 16);
     const skyMat = new THREE.MeshBasicMaterial({ map: Utils.makeSkyGradient(), side: THREE.BackSide });
-    scene.add(new THREE.Mesh(skyGeo, skyMat));
-
+    scene.add(new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), skyMat));
     scene.fog = new THREE.FogExp2(0x0a0e1a, 0.0025);
 
     const disc = new THREE.Mesh(
@@ -74,19 +71,33 @@
     scene.add(disc);
   }
 
-  /* ═══════════ INPUT ═══════════ */
-  const keys  = {};
-  const input = { throttle: false, brake: false, left: false, right: false, nitro: false };
+  /* ═══════════ INPUT ═══════════════════════════════════════════════════════
+   *
+   * FIX — Mobile input was being overwritten every frame.
+   *
+   * Previously readInput() unconditionally assigned every field from `keys`,
+   * wiping out any touch-state that setupMobileControls() had set.
+   * The result was that mobile buttons appeared to do nothing — the very
+   * next call to readInput() reset everything to false.
+   *
+   * Solution: keep a separate `mobileInput` object that touchstart/touchend
+   * write to.  readInput() then ORs the two sources together so keyboard
+   * and touch both work, independently, without clobbering each other.
+   */
+  const keys        = {};
+  const mobileInput = { throttle: false, brake: false, left: false, right: false, nitro: false };
+  const input       = { throttle: false, brake: false, left: false, right: false, nitro: false };
 
   window.addEventListener('keydown', e => { keys[e.code] = true;  });
   window.addEventListener('keyup',   e => { keys[e.code] = false; });
 
   function readInput() {
-    input.throttle = keys['ArrowUp']    || keys['KeyW'];
-    input.brake    = keys['ArrowDown']  || keys['KeyS'];
-    input.left     = keys['ArrowLeft']  || keys['KeyA'];
-    input.right    = keys['ArrowRight'] || keys['KeyD'];
-    input.nitro    = keys['Space'];
+    /* OR keyboard with mobile so neither source overwrites the other */
+    input.throttle = (keys['ArrowUp']    || keys['KeyW'])           || mobileInput.throttle;
+    input.brake    = (keys['ArrowDown']  || keys['KeyS'])           || mobileInput.brake;
+    input.left     = (keys['ArrowLeft']  || keys['KeyA'])           || mobileInput.left;
+    input.right    = (keys['ArrowRight'] || keys['KeyD'])           || mobileInput.right;
+    input.nitro    =  keys['Space']                                 || mobileInput.nitro;
   }
 
   function setupMobileControls() {
@@ -100,27 +111,30 @@
     for (const [id, action] of Object.entries(map)) {
       const btn = document.getElementById(id);
       if (!btn) continue;
-      btn.addEventListener('touchstart', e => { e.preventDefault(); input[action] = true;  }, { passive: false });
-      btn.addEventListener('touchend',   e => { e.preventDefault(); input[action] = false; }, { passive: false });
+      /* Write to mobileInput — NOT to input directly — so readInput()
+         can merge it safely each frame without risk of overwrites.     */
+      btn.addEventListener('touchstart', e => { e.preventDefault(); mobileInput[action] = true;  }, { passive: false });
+      btn.addEventListener('touchend',   e => { e.preventDefault(); mobileInput[action] = false; }, { passive: false });
+      /* Also support mouse for desktop testing of the on-screen buttons */
+      btn.addEventListener('mousedown', () => { mobileInput[action] = true;  });
+      btn.addEventListener('mouseup',   () => { mobileInput[action] = false; });
     }
   }
 
   /* ═══════════ CAMERA SHAKE ═══════════ */
   let shakeIntensity = 0;
-
   Utils.on('cameraShake', ({ intensity }) => {
     shakeIntensity = Math.max(shakeIntensity, intensity);
   });
-
   function applyCameraShake(dt) {
     if (shakeIntensity < 0.001) return;
-    camera.position.x   += (Math.random() - 0.5) * shakeIntensity * 0.4;
-    camera.position.y   += (Math.random() - 0.5) * shakeIntensity * 0.2;
-    shakeIntensity -= 5 * dt * shakeIntensity;
+    camera.position.x += (Math.random() - 0.5) * shakeIntensity * 0.4;
+    camera.position.y += (Math.random() - 0.5) * shakeIntensity * 0.2;
+    shakeIntensity    -= 5 * dt * shakeIntensity;
   }
 
   /* ═══════════ GAME STATE ═══════════ */
-  let gameState = 'loading';
+  let gameState  = 'loading';
   const TOTAL_LAPS = 3;
 
   /* ═══════════ LOADING SEQUENCE ═══════════ */
@@ -150,37 +164,25 @@
     ls.style.display    = 'none';
   }
 
-  /* ═══════════ SCENE INIT ═══════════
-   *
-   * ORDER MATTERS:
-   *   1. Physics.init()  — creates the CANNON world & materials
-   *   2. setupLighting() — pure Three.js, no dependencies
-   *   3. setupSky()      — pure Three.js
-   *   4. Track.build()   — calls Physics.createGround() / createStaticBox()
-   *   5. Particles.init()
-   *   6. AI.init()
-   *   7. Bike.init()     — calls Physics.createBikeBody(); must come AFTER Physics.init()
-   *   8. HUD / Garage
+  /* ═══════════ SCENE INIT ═══════════════════════════════════════════════════
+   * Dependency order is critical:
+   *   1. Physics.init()   — creates CANNON world + materials
+   *   2. setupLighting()  — pure Three.js
+   *   3. setupSky()       — pure Three.js
+   *   4. Track.build()    — calls Physics.createGround() / createStaticBox()
+   *   5. Particles.init() — passive
+   *   6. AI.init()        — passive
+   *   7. Bike.init()      — calls Physics.createBikeBody(); needs world ready
+   *   8. HUD / Garage     — DOM only, no physics dependency
    */
   function initScene() {
-    // ── 1. Physics MUST be first ──────────────────────────────────────────────
-    Physics.init();
-
-    // ── 2-3. Three.js environment ─────────────────────────────────────────────
+    Physics.init();       // ← must be first
     setupLighting();
     setupSky();
-
-    // ── 4. Track (needs Physics world for barrier bodies) ─────────────────────
     Track.build(scene);
-
-    // ── 5-6. Passive subsystems ───────────────────────────────────────────────
     Particles.init(scene);
     AI.init(scene);
-
-    // ── 7. Bike — creates CANNON body; Physics must already be initialised ────
     Bike.init(scene, camera);
-
-    // ── 8. UI subsystems ─────────────────────────────────────────────────────
     HUD.init();
     HUD.setTotalLaps(TOTAL_LAPS);
     Garage.init();
@@ -226,38 +228,42 @@
     document.getElementById('race-over-screen').classList.remove('hidden');
   }
 
-  /* ═══════════ UI WIRING ═══════════ */
+  /* ═══════════ UI WIRING ═════════════════════════════════════════════════════
+   * All button IDs match index.html exactly.  Called once during boot after
+   * initScene() so all subsystems (Garage etc.) are already initialised.
+   */
   function wireUI() {
-    document.getElementById('btn-start-race').addEventListener('click', startRace);
+    const $ = id => document.getElementById(id);
 
-    document.getElementById('btn-garage').addEventListener('click', () => {
-      document.getElementById('main-menu').classList.add('hidden');
+    $('btn-start-race').addEventListener('click', startRace);
+
+    $('btn-garage').addEventListener('click', () => {
+      $('main-menu').classList.add('hidden');
       Garage.show();
     });
 
-    document.getElementById('btn-settings').addEventListener('click', () => {
-      // Reserved for future settings modal
+    $('btn-settings').addEventListener('click', () => {
+      /* Reserved for future settings modal */
     });
 
-    document.getElementById('btn-goto-garage').addEventListener('click', () => {
-      document.getElementById('race-over-screen').classList.add('hidden');
+    $('btn-goto-garage').addEventListener('click', () => {
+      $('race-over-screen').classList.add('hidden');
       Garage.show();
     });
 
-    document.getElementById('btn-race-again').addEventListener('click', () => {
-      document.getElementById('race-over-screen').classList.add('hidden');
+    $('btn-race-again').addEventListener('click', () => {
+      $('race-over-screen').classList.add('hidden');
       startRace();
     });
 
-    document.getElementById('btn-blown-pit').addEventListener('click', () => {
+    $('btn-blown-pit').addEventListener('click', () => {
       endRace(false);
     });
 
     Utils.on('garageToRace', startRace);
-    Utils.on('engineBlown', () => { /* HUD.js handles the overlay via its own listener */ });
   }
 
-  /* ═══════════ RACE WIN CHECK ═══════════ */
+  /* ═══════════ LAP WIN CHECK ═══════════ */
   function checkLapWin() {
     const s = Bike.getState();
     if (s.lapsCompleted >= TOTAL_LAPS && gameState === 'racing') {
@@ -270,7 +276,6 @@
 
   function loop(now) {
     requestAnimationFrame(loop);
-
     const dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
 
@@ -284,8 +289,7 @@
       const s = Bike.getState();
       Particles.updateExhaust(
         Bike.getMesh() ? Bike.getMesh().position : new THREE.Vector3(),
-        s.speed,
-        dt
+        s.speed, dt
       );
       Particles.update(dt);
 
@@ -301,7 +305,7 @@
 
   /* ═══════════ BOOT ═══════════ */
   async function boot() {
-    initScene();   // Physics.init() is the very first call inside here
+    initScene();
     wireUI();
     setupMobileControls();
 
@@ -316,7 +320,7 @@
 
   boot().catch(console.error);
 
-  /* ── Particle helpers exposed for external events ── */
+  /* Damage particle hook */
   Utils.on('damage', () => {
     const m = Bike.getMesh();
     if (m) {
