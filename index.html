@@ -10,7 +10,6 @@
 </head>
 <body>
 
-  <!-- ─── LOADING SCREEN ─── -->
   <div id="loading-screen">
     <div class="loading-inner">
       <div class="loading-logo">MOTO<span>GP</span> EXTREME</div>
@@ -20,7 +19,6 @@
     </div>
   </div>
 
-  <!-- ─── MAIN MENU ─── -->
   <div id="main-menu" class="screen hidden">
     <div class="menu-bg-overlay"></div>
     <div class="menu-content">
@@ -37,7 +35,6 @@
     </div>
   </div>
 
-  <!-- ─── GARAGE SCREEN ─── -->
   <div id="garage-screen" class="screen hidden">
     <div class="garage-inner">
       <div class="garage-title">GARAGE &amp; PIT STOP</div>
@@ -80,7 +77,6 @@
     </div>
   </div>
 
-  <!-- ─── RACE OVER SCREEN ─── -->
   <div id="race-over-screen" class="screen hidden">
     <div class="raceover-inner">
       <div id="race-over-title">RACE COMPLETE</div>
@@ -93,13 +89,10 @@
     </div>
   </div>
 
-  <!-- ─── GAME CANVAS ─── -->
   <canvas id="game-canvas"></canvas>
 
-  <!-- ─── HUD ─── -->
   <div id="hud" class="hidden">
 
-    <!-- Speedometer cluster (bottom-left) -->
     <div class="hud-cluster hud-left">
       <canvas id="rpm-gauge" width="180" height="180"></canvas>
       <div class="hud-speed-readout">
@@ -112,7 +105,6 @@
       </div>
     </div>
 
-    <!-- Center top info bar -->
     <div class="hud-top-bar">
       <div class="hud-top-item">
         <div class="hud-top-label">LAP</div>
@@ -128,7 +120,6 @@
       </div>
     </div>
 
-    <!-- Health bar (bottom-right) -->
     <div class="hud-cluster hud-right">
       <div class="hud-health-label">BIKE HEALTH</div>
       <div class="hud-health-bar-bg">
@@ -139,20 +130,16 @@
       <div class="hud-nitro-pips" id="hud-nitro-pips"></div>
     </div>
 
-    <!-- Damage flash overlay -->
     <div id="damage-flash"></div>
 
-    <!-- Nitro flare -->
     <div id="nitro-flare" class="hidden"></div>
 
-    <!-- Engine blown overlay -->
     <div id="engine-blown" class="hidden">
       <div class="engine-blown-text">ENGINE BLOWN</div>
       <div class="engine-blown-sub">Your bike has stopped. Head to the pit.</div>
       <button class="btn-primary" id="btn-blown-pit">PIT STOP</button>
     </div>
 
-    <!-- Mobile controls -->
     <div id="mobile-controls">
       <button class="mobile-btn" id="mob-left">◀</button>
       <button class="mobile-btn" id="mob-throttle">▲</button>
@@ -163,17 +150,16 @@
 
   </div>
 
-  <!-- Scripts (order matters) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
-  <script src="js/utils.js"></script>
-  <script src="js/physics.js"></script>
-  <script src="js/track.js"></script>
-  <script src="js/bike.js"></script>
-  <script src="js/ai.js"></script>
-  <script src="js/particles.js"></script>
-  <script src="js/hud.js"></script>
-  <script src="js/garage.js"></script>
-  <script src="js/main.js"></script>
+  <script src="utils.js"></script>
+  <script src="physics.js"></script>
+  <script src="track.js"></script>
+  <script src="bike.js"></script>
+  <script src="ai.js"></script>
+  <script src="particles.js"></script>
+  <script src="hud.js"></script>
+  <script src="garage.js"></script>
+  <script src="main.js"></script>
 </body>
 </html>
