@@ -6,141 +6,95 @@
 
 const Bike = (() => {
 
-  /* ── Tuning constants ── */
+  /* ── Tuning ── */
   const CFG = {
-    maxSpeed:         90,    // m/s ≈ 324 km/h
+    maxSpeed:         90,
     acceleration:     28,
     brakeForce:       55,
-    steerSpeed:       1.8,   // rad/s max yaw rate
-    steerReturn:      4.5,   // how fast steering centres
-    leanFactor:       0.38,  // visual lean per steering input
-    groundY:          0.52,  // ride height
+    steerSpeed:       1.8,
+    steerReturn:      4.5,
+    leanFactor:       0.38,
+    groundY:          0.52,
     nitroMult:        1.6,
-    nitroDuration:    3.0,   // seconds
+    nitroDuration:    3.0,
     maxNitroPips:     3,
     maxHealth:        100,
     collisionDmg:     18,
-    collisionImpulse: 12,    // bounce-back force
+    /* Minimum impact velocity that counts as a damaging hit.
+       Raised from 3 → 6 to stop resting contacts from dealing damage. */
+    minImpactForDmg:  6,
+    /* Minimum bike speed (m/s) needed for a collision to hurt.
+       Prevents ghost damage while stationary. */
+    minSpeedForDmg:   2,
   };
 
-  let mesh   = null;   // THREE.Group
-  let body   = null;   // CANNON.Body
+  let mesh   = null;
+  let body   = null;
   let scene  = null;
   let camera = null;
 
-  /* State */
   const state = {
-    speed: 0,
-    steer: 0,
-    lean:  0,
-    gear:  1,
-    rpm:   0,
-    health:           CFG.maxHealth,
-    nitroPips:        CFG.maxNitroPips,
-    nitroTime:        0,
-    nitroActive:      false,
+    speed: 0,  steer: 0,  lean: 0,
+    gear: 1,   rpm: 0,
+    health:            CFG.maxHealth,
+    nitroPips:         CFG.maxNitroPips,
+    nitroTime:         0,
+    nitroActive:       false,
     distanceTravelled: 0,
-    lapsCompleted:    0,
-    raceStartTime:    0,
-    lastDmgTime:      -5,
-    isDead:           false,
-    // upgrades
-    engineLevel: 0,
-    tireLevel:   0,
+    lapsCompleted:     0,
+    raceStartTime:     0,
+    isDead:            false,
+    engineLevel:       0,
+    tireLevel:         0,
   };
 
-  /* ─ Build the 3-D bike mesh ─ */
+  /* ─ Build mesh ─ */
   function _buildMesh() {
     const g = new THREE.Group();
 
     const bodyMat    = new THREE.MeshStandardMaterial({ color: 0x0a0a14, roughness: 0.2, metalness: 0.8 });
     const fairingMat = new THREE.MeshStandardMaterial({ color: 0xcc1111, roughness: 0.3, metalness: 0.6 });
     const chromeMat  = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.1, metalness: 0.95 });
-    const rubberMat  = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9, metalness: 0.0 });
-    const glassMat   = new THREE.MeshStandardMaterial({ color: 0x88aaff, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.5 });
+    const rubberMat  = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.9 });
+    const glassMat   = new THREE.MeshStandardMaterial({ color: 0x88aaff, roughness: 0.05, transparent: true, opacity: 0.5 });
     const seatMat    = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.95 });
+    const riderMat   = new THREE.MeshStandardMaterial({ color: 0x111120, roughness: 0.9 });
 
-    /* Chassis */
-    const chassis = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.28, 1.6), bodyMat);
-    chassis.castShadow = true;
-    g.add(chassis);
+    const add = (geo, mat, px=0, py=0, pz=0, rx=0, ry=0, rz=0, shadow=true) => {
+      const m = new THREE.Mesh(geo, mat);
+      m.position.set(px, py, pz);
+      if (rx || ry || rz) m.rotation.set(rx, ry, rz);
+      if (shadow) m.castShadow = true;
+      g.add(m);
+      return m;
+    };
 
-    /* Front fairing */
-    const fairing = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.52, 0.9), fairingMat);
-    fairing.position.set(0, 0.16, 0.52);
-    fairing.castShadow = true;
-    g.add(fairing);
+    add(new THREE.BoxGeometry(0.36, 0.28, 1.6), bodyMat);
+    add(new THREE.BoxGeometry(0.44, 0.52, 0.9), fairingMat, 0, 0.16, 0.52);
+    add(new THREE.BoxGeometry(0.35, 0.28, 0.06), glassMat, 0, 0.4, 0.44, 0,0,0, false);
+    add(new THREE.BoxGeometry(0.28, 0.22, 0.72), fairingMat, 0, 0.12, -0.64);
+    add(new THREE.BoxGeometry(0.24, 0.08, 0.56), seatMat, 0, 0.26, -0.22, 0,0,0, false);
 
-    /* Windscreen */
-    const wscreen = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.28, 0.06), glassMat);
-    wscreen.position.set(0, 0.4, 0.44);
-    g.add(wscreen);
-
-    /* Tail section */
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.72), fairingMat);
-    tail.position.set(0, 0.12, -0.64);
-    tail.castShadow = true;
-    g.add(tail);
-
-    /* Seat */
-    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.08, 0.56), seatMat);
-    seat.position.set(0, 0.26, -0.22);
-    g.add(seat);
-
-    /* Exhaust pipes */
     for (const sx of [-0.12, 0.12]) {
-      const exhaust = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.55, 8), chromeMat);
-      exhaust.rotation.z = Math.PI / 2;
-      exhaust.position.set(sx, -0.09, -0.5);
-      exhaust.castShadow = true;
-      g.add(exhaust);
+      add(new THREE.CylinderGeometry(0.04, 0.05, 0.55, 8), chromeMat, sx, -0.09, -0.5, 0, 0, Math.PI/2);
     }
-
-    /* Fork / front suspension */
     for (const sx of [-0.14, 0.14]) {
-      const fork = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 6), chromeMat);
-      fork.position.set(sx, -0.08, 0.72);
-      fork.rotation.x = 0.22;
-      g.add(fork);
+      add(new THREE.CylinderGeometry(0.04, 0.04, 0.5, 6), chromeMat, sx, -0.08, 0.72, 0.22);
     }
 
-    /* Wheels */
     const wheelGeo = new THREE.TorusGeometry(0.32, 0.1, 12, 24);
-    const hubGeo   = new THREE.CylinderGeometry(0.1, 0.1, 0.14, 16);
+    add(wheelGeo, rubberMat, 0, -0.18,  0.75, 0, Math.PI/2, 0);
+    add(wheelGeo, rubberMat, 0, -0.18, -0.78, 0, Math.PI/2, 0);
 
-    const frontWheel = new THREE.Mesh(wheelGeo, rubberMat);
-    frontWheel.rotation.y = Math.PI / 2;
-    frontWheel.position.set(0, -0.18, 0.75);
-    frontWheel.castShadow = true;
-    g.add(frontWheel);
-
-    const rearWheel = new THREE.Mesh(wheelGeo, rubberMat);
-    rearWheel.rotation.y = Math.PI / 2;
-    rearWheel.position.set(0, -0.18, -0.78);
-    rearWheel.castShadow = true;
-    g.add(rearWheel);
-
+    const hubGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.14, 16);
     for (const wz of [0.75, -0.78]) {
-      const hub = new THREE.Mesh(hubGeo, chromeMat);
-      hub.rotation.x = Math.PI / 2;
-      hub.position.set(0, -0.18, wz);
-      g.add(hub);
+      add(hubGeo, chromeMat, 0, -0.18, wz, Math.PI/2);
     }
 
-    /* Rider silhouette */
-    const riderMat = new THREE.MeshStandardMaterial({ color: 0x111120, roughness: 0.9 });
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.44, 0.36), riderMat);
-    torso.position.set(0, 0.5, 0.1);
-    torso.rotation.x = -0.45;
-    torso.castShadow = true;
-    g.add(torso);
+    add(new THREE.BoxGeometry(0.28, 0.44, 0.36), riderMat, 0, 0.5, 0.1, -0.45);
+    add(new THREE.SphereGeometry(0.18, 12, 8), riderMat, 0, 0.82, 0.16);
 
-    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 8), riderMat);
-    helmet.position.set(0, 0.82, 0.16);
-    helmet.castShadow = true;
-    g.add(helmet);
-
-    return { group: g };
+    return g;
   }
 
   /* ─ init ─ */
@@ -157,52 +111,79 @@ const Bike = (() => {
       Physics.getWorld().remove(body);
     }
 
-    // Fresh state
-    state.speed             = 0;
-    state.steer             = 0;
-    state.lean              = 0;
-    state.gear              = 1;
-    state.rpm               = 0;
-    state.health            = CFG.maxHealth;
-    state.nitroPips         = CFG.maxNitroPips;
-    state.nitroTime         = 0;
-    state.nitroActive       = false;
-    state.distanceTravelled = 0;
-    state.lapsCompleted     = 0;
-    state.raceStartTime     = performance.now();
-    state.lastDmgTime       = -5;
-    state.isDead            = false;
+    Object.assign(state, {
+      speed: 0, steer: 0, lean: 0, gear: 1, rpm: 0,
+      health:            CFG.maxHealth,
+      nitroPips:         CFG.maxNitroPips,
+      nitroTime:         0,
+      nitroActive:       false,
+      distanceTravelled: 0,
+      lapsCompleted:     0,
+      raceStartTime:     performance.now(),
+      isDead:            false,
+    });
 
-    const { group } = _buildMesh();
-    mesh = group;
+    mesh = _buildMesh();
     mesh.position.set(0, CFG.groundY, -2);
     mesh.castShadow = true;
     scene.add(mesh);
 
-    body = Physics.createBikeBody({ x: 0, y: CFG.groundY + 0.3, z: -2 });
+    /* FIX: spawn y raised to CFG.groundY + 0.6 (was + 0.3).
+     * The compound body's half-height is ~0.3, so + 0.3 placed its
+     * bottom face flush with the ground plane, causing an immediate
+     * resting-contact collision event at frame 0 that drained health.
+     * + 0.6 gives a small air-gap so the bike settles naturally.       */
+    body = Physics.createBikeBody({ x: 0, y: CFG.groundY + 0.6, z: -2 });
     body._isBike = true;
     body.addEventListener('collide', _onCollide);
 
     _lastCollideTime = 0;
   }
 
-  /* ─ Collision handler ─ */
+  /* ─ Collision handler ──────────────────────────────────────────────────────
+   *
+   * FIX — Ghost damage while standing still:
+   *
+   * Root cause: the ground plane is a static body whose collision event fires
+   * every physics step while the bike rests on it.  Previously there was no
+   * distinction between "hit a barrier" and "touching the road", so every
+   * resting contact accumulated damage.
+   *
+   * Fixes applied:
+   *  1. Skip any contact with a body tagged _isGround (the road surface).
+   *  2. Require state.speed > CFG.minSpeedForDmg — no damage while parked.
+   *  3. Raised impact threshold: CFG.minImpactForDmg (6) instead of 3.
+   *  4. Debounce window widened to 0.6 s.
+   */
   let _lastCollideTime = 0;
   function _onCollide(e) {
     const now = performance.now() / 1000;
-    if (now - _lastCollideTime < 0.4) return;   // debounce
-    _lastCollideTime = now;
+    if (now - _lastCollideTime < 0.6) return;
 
     if (state.isDead) return;
-    const impact = e.contact.getImpactVelocityAlongNormal();
-    if (Math.abs(impact) < 3) return;   // ignore light grazes
 
-    const dmg = Math.min(CFG.collisionDmg * (Math.abs(impact) / 10), 35);
+    /* ── Filter 1: skip ground contacts ── */
+    const other = e.body;
+    if (!other || other._isGround) return;
+
+    /* ── Filter 2: bike must be moving ── */
+    if (state.speed < CFG.minSpeedForDmg) return;
+
+    /* ── Filter 3: impact velocity threshold ── */
+    const impact = e.contact.getImpactVelocityAlongNormal();
+    if (Math.abs(impact) < CFG.minImpactForDmg) return;
+
+    _lastCollideTime = now;
+
+    const dmg = Math.min(CFG.collisionDmg * (Math.abs(impact) / 12), 35);
     applyDamage(dmg);
 
-    // Bounce-back
-    const vel = body.velocity;
-    body.velocity.set(-vel.x * 0.6, vel.y * 0.3, -vel.z * 0.5);
+    /* Bounce back */
+    body.velocity.set(
+      -body.velocity.x * 0.6,
+       body.velocity.y * 0.3,
+      -body.velocity.z * 0.5
+    );
     state.speed *= 0.35;
   }
 
@@ -217,7 +198,7 @@ const Bike = (() => {
     }
   }
 
-  /* ─ Update (called every frame) ─ */
+  /* ─ Update ─ */
   function update(dt, input) {
     if (state.isDead) { _syncMeshToBody(); return; }
 
@@ -252,30 +233,22 @@ const Bike = (() => {
     }
     state.speed = Utils.clamp(state.speed, 0, maxSpd);
 
-    /* Steering — Left = Left, Right = Right */
+    /* Steering */
     const steerTarget = input.left ? -1 : (input.right ? 1 : 0);
     const speedFactor = Utils.clamp(state.speed / 30, 0.2, 1.0);
     const steerRate   = CFG.steerSpeed * speedFactor * tireGrip;
 
-    if (steerTarget !== 0) {
-      state.steer = Utils.lerp(state.steer, steerTarget, steerRate * dt * 2.2);
-    } else {
-      state.steer = Utils.lerp(state.steer, 0, CFG.steerReturn * dt);
-    }
+    state.steer = steerTarget !== 0
+      ? Utils.lerp(state.steer, steerTarget, steerRate * dt * 2.2)
+      : Utils.lerp(state.steer, 0, CFG.steerReturn * dt);
     state.steer = Utils.clamp(state.steer, -1, 1);
 
-    /* Apply yaw — positive steer → right turn → negative yaw delta */
     const yawRate = -state.steer * steerRate * speedFactor;
     body.angularVelocity.y = Utils.lerp(body.angularVelocity.y, yawRate, 10 * dt);
 
-    /* Apply forward velocity directly from quaternion forward vector.
-     *
-     * FIX: the old code contained dead-code that called
-     *   body.quaternion.toEuler(new CANNON.Vec3()).y
-     * but in Cannon.js 0.6.2 toEuler() returns undefined, so accessing
-     * .y on it would throw.  That block is removed; we use the working
-     * quaternion-math path that was already below it.
-     */
+    /* Forward velocity — derived from quaternion directly.
+     * (The old dead-code "fwd" variable called toEuler().y which
+     *  returns undefined in Cannon 0.6.2 and would have crashed.) */
     const q  = body.quaternion;
     const fx = -2 * (q.x * q.z - q.w * q.y);
     const fz =  1  - 2 * (q.x * q.x + q.y * q.y);
@@ -287,16 +260,13 @@ const Bike = (() => {
     body.position.y = CFG.groundY + 0.3;
 
     /* Visual lean */
-    const targetLean = -state.steer * CFG.leanFactor;
-    state.lean = Utils.lerp(state.lean, targetLean, 8 * dt);
+    state.lean = Utils.lerp(state.lean, -state.steer * CFG.leanFactor, 8 * dt);
 
     _updateGearRPM(maxSpd);
-
     state.distanceTravelled += state.speed * dt;
 
-    /* Lap counter */
-    const lapLength = Track.getTrackLength();
-    if (state.distanceTravelled > lapLength * (state.lapsCompleted + 1)) {
+    const lapLen = Track.getTrackLength();
+    if (state.distanceTravelled > lapLen * (state.lapsCompleted + 1)) {
       state.lapsCompleted++;
       Utils.emit('lapComplete', { lap: state.lapsCompleted });
     }
@@ -305,13 +275,12 @@ const Bike = (() => {
   }
 
   function _updateGearRPM(maxSpd) {
-    const numGears  = 6;
-    const speedPct  = state.speed / maxSpd;
-    state.gear      = Utils.clamp(Math.ceil(speedPct * numGears), 1, numGears);
-    const gearBottom = (state.gear - 1) / numGears;
-    const gearTop    =  state.gear      / numGears;
-    const rpmPct     = (speedPct - gearBottom) / (gearTop - gearBottom);
-    state.rpm        = Utils.clamp(rpmPct, 0.2, 1.0);
+    const n         = 6;
+    const pct       = state.speed / maxSpd;
+    state.gear      = Utils.clamp(Math.ceil(pct * n), 1, n);
+    const bot       = (state.gear - 1) / n;
+    const top       =  state.gear      / n;
+    state.rpm       = Utils.clamp((pct - bot) / (top - bot), 0.2, 1.0);
   }
 
   function _syncMeshToBody() {
@@ -319,20 +288,16 @@ const Bike = (() => {
     mesh.position.copy(body.position);
     mesh.position.y = CFG.groundY;
 
-    // Yaw from physics, lean (roll) applied visually
     const euler = new THREE.Euler();
     const q = new THREE.Quaternion(
-      body.quaternion.x,
-      body.quaternion.y,
-      body.quaternion.z,
-      body.quaternion.w
+      body.quaternion.x, body.quaternion.y,
+      body.quaternion.z, body.quaternion.w
     );
     euler.setFromQuaternion(q, 'YXZ');
     euler.x = 0;
     euler.z = state.lean;
     mesh.quaternion.setFromEuler(euler);
 
-    // Spin wheels
     mesh.children.forEach(child => {
       if (child.geometry && child.geometry.type === 'TorusGeometry') {
         child.rotation.x += state.speed * 0.06;
@@ -340,13 +305,12 @@ const Bike = (() => {
     });
   }
 
-  /* ─ Camera follow ─ */
+  /* ─ Camera ─ */
   function updateCamera(dt) {
     if (!mesh) return;
     const offset = new THREE.Vector3(0, 2.2, 6.5);
     offset.applyQuaternion(mesh.quaternion);
-    const targetPos = mesh.position.clone().add(offset);
-    camera.position.lerp(targetPos, 8 * dt);
+    camera.position.lerp(mesh.position.clone().add(offset), 8 * dt);
     camera.lookAt(mesh.position.clone().add(new THREE.Vector3(0, 0.8, 0)));
 
     const targetFOV = 55 + (state.speed / CFG.maxSpeed) * 25 + (state.nitroActive ? 12 : 0);
@@ -355,7 +319,7 @@ const Bike = (() => {
   }
 
   /* ─ Upgrades ─ */
-  function repairBike()    { state.health     = CFG.maxHealth; Utils.emit('repaired'); }
+  function repairBike()    { state.health     = CFG.maxHealth;               Utils.emit('repaired'); }
   function upgradeEngine() { state.engineLevel = Math.min(state.engineLevel + 1, 3); }
   function upgradeTires()  { state.tireLevel   = Math.min(state.tireLevel   + 1, 3); }
   function addNitro()      { state.nitroPips   = Math.min(state.nitroPips   + 3, CFG.maxNitroPips + 3); }
