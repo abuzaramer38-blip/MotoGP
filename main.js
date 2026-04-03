@@ -11,10 +11,10 @@
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
-  renderer.outputEncoding    = THREE.sRGBEncoding;
-  renderer.toneMapping       = THREE.ACESFilmicToneMapping;
+  renderer.shadowMap.enabled   = true;
+  renderer.shadowMap.type      = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding      = THREE.sRGBEncoding;
+  renderer.toneMapping         = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.1;
 
   const scene  = new THREE.Scene();
@@ -29,11 +29,9 @@
 
   /* ═══════════ LIGHTING ═══════════ */
   function setupLighting() {
-    // Ambient
     const ambient = new THREE.AmbientLight(0x334466, 0.8);
     scene.add(ambient);
 
-    // Sun
     const sun = new THREE.DirectionalLight(0xfff5e0, 2.2);
     sun.position.set(50, 80, -100);
     sun.castShadow = true;
@@ -46,142 +44,129 @@
     sun.shadow.bias = -0.002;
     scene.add(sun);
 
-    // Horizon fill
     const fill = new THREE.HemisphereLight(0x6688cc, 0x443322, 0.5);
     scene.add(fill);
 
-    // Track-side spots (every 120m)
     for (let z = 0; z < 800; z += 120) {
       for (const sx of [-10, 10]) {
         const spot = new THREE.SpotLight(0xffffff, 1.5, 80, Math.PI / 6, 0.4);
         spot.position.set(sx, 14, -z);
         spot.target.position.set(0, 0, -z);
-        spot.castShadow = false;   // perf — too many shadows
-        scene.add(spot);
-        scene.add(spot.target);
+        spot.castShadow = false;
+        scene.add(spot, spot.target);
       }
     }
   }
 
   /* ═══════════ SKY ═══════════ */
   function setupSky() {
-    // Gradient sky dome
     const skyGeo = new THREE.SphereGeometry(900, 32, 16);
     const skyTex = Utils.makeSkyGradient();
     const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide });
-    const sky = new THREE.Mesh(skyGeo, skyMat);
-    scene.add(sky);
+    scene.add(new THREE.Mesh(skyGeo, skyMat));
 
-    // Fog
     scene.fog = new THREE.FogExp2(0x0a0e1a, 0.0025);
 
-    // Sun disc
-    const discGeo = new THREE.CircleGeometry(18, 32);
     const discMat = new THREE.MeshBasicMaterial({ color: 0xff8833, transparent: true, opacity: 0.85 });
-    const disc = new THREE.Mesh(discGeo, discMat);
+    const disc    = new THREE.Mesh(new THREE.CircleGeometry(18, 32), discMat);
     disc.position.set(-120, 60, -700);
     scene.add(disc);
   }
 
   /* ═══════════ INPUT ═══════════ */
-  const keys = {};
+  const keys  = {};
 
-  // ─ FIXED: input object is the single source of truth for all control paths ─
-  const input = {
-    throttle: false,
-    brake:    false,
-    left:     false,
-    right:    false,
-    nitro:    false,
-  };
+  // Single shared input object — both keyboard and touch write here.
+  // readInput() ORs keyboard state in each frame; touch handlers set/clear
+  // their keys directly on touchstart / touchend / touchcancel.
+  const input = { throttle: false, brake: false, left: false, right: false, nitro: false };
+
+  // FIX — prevent default on game keys so the browser doesn't scroll the page
+  // or steal focus, which was causing keyup to fire prematurely and leaving
+  // keys "stuck" as true, making the brake appear to do nothing (throttle was
+  // also stuck on after the first press).
+  const GAME_KEYS = new Set([
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+    'KeyW', 'KeyA', 'KeyS', 'KeyD',
+    'Space',
+  ]);
 
   window.addEventListener('keydown', e => {
+    if (GAME_KEYS.has(e.code)) e.preventDefault();
     keys[e.code] = true;
-    // Prevent spacebar from scrolling the page during nitro
-    if (e.code === 'Space') e.preventDefault();
   });
   window.addEventListener('keyup', e => {
     keys[e.code] = false;
   });
 
-  // ─ FIXED readInput ─
-  // Previously brake was wired to ArrowDown/KeyS but the comment claimed it
-  // was broken.  The real breakage was in bike.js's velocity formula (see
-  // there), but we also harden the mapping here so it is unambiguous.
+  // Called once per frame while racing.
+  // Merges current keyboard state into the shared `input` object.
+  // Touch state is already live in `input` from the event handlers below.
   function readInput() {
-    // Throttle  → Up arrow OR W
-    input.throttle = !!(keys['ArrowUp']    || keys['KeyW']);
-
-    // Brake     → Down arrow OR S
-    //   (mobile supplement added in setupMobileControls via input object directly)
-    input.brake    = !!(keys['ArrowDown']  || keys['KeyS']);
-
-    // Steer left  → Left arrow OR A
-    input.left     = !!(keys['ArrowLeft']  || keys['KeyA']);
-
-    // Steer right → Right arrow OR D
-    input.right    = !!(keys['ArrowRight'] || keys['KeyD']);
-
-    // Nitro     → Space
-    input.nitro    = !!(keys['Space']);
+    // OR with touch: if either keyboard or touch says true, input is true.
+    input.throttle = !!(keys['ArrowUp']    || keys['KeyW'])    || input.throttle;
+    input.brake    = !!(keys['ArrowDown']  || keys['KeyS'])    || input.brake;
+    input.left     = !!(keys['ArrowLeft']  || keys['KeyA'])    || input.left;
+    input.right    = !!(keys['ArrowRight'] || keys['KeyD'])    || input.right;
+    input.nitro    = !!(keys['Space'])                         || input.nitro;
   }
 
-  // ─ FIXED setupMobileControls ─
-  // Mobile buttons write directly into the shared `input` object so they
-  // compose cleanly with keyboard input and the fix in bike.js.
+  // Resets only the keyboard-contributed portion each frame so touch state
+  // survives between frames (it's managed by events, not polling).
+  function clearKeyboardInput() {
+    // We rebuild the keyboard portion from `keys` each frame in readInput(),
+    // so we just need to zero out everything here and let readInput fill it in.
+    // Touch handlers will re-assert their own flags immediately if still held.
+    input.throttle = false;
+    input.brake    = false;
+    input.left     = false;
+    input.right    = false;
+    input.nitro    = false;
+  }
+
+  /* ─ Mobile controls ─ */
   function setupMobileControls() {
-    // Map: element-id → input key
-    // These IDs must match whatever is in your HTML.  Both the original IDs
-    // (mob-throttle / mob-brake) and common alternates (btn-throttle /
-    // btn-brake) are handled so the code works regardless of which HTML
-    // template is in use.
+    // Map element-id → input key.
+    // Multiple candidate IDs per action: tries each in order, uses first found.
     const bindings = [
-      // [array of possible element IDs to try]  → input key
-      [['mob-throttle', 'btn-throttle', 'ctrl-throttle'], 'throttle'],
-      [['mob-brake',    'btn-brake',    'ctrl-brake'],    'brake'],
-      [['mob-left',     'btn-left',     'ctrl-left'],     'left'],
-      [['mob-right',    'btn-right',    'ctrl-right'],    'right'],
-      [['mob-nitro',    'btn-nitro',    'ctrl-nitro'],    'nitro'],
+      [['mob-throttle', 'btn-throttle'], 'throttle'],
+      [['mob-brake',    'btn-brake'],    'brake'],
+      [['mob-left',     'btn-left'],     'left'],
+      [['mob-right',    'btn-right'],    'right'],
+      [['mob-nitro',    'btn-nitro'],    'nitro'],
     ];
 
     for (const [ids, key] of bindings) {
-      // Find whichever element exists in the DOM
       let el = null;
       for (const id of ids) {
         el = document.getElementById(id);
         if (el) break;
       }
       if (!el) {
-        // No matching element — skip silently (keyboard still works)
         console.warn(`[Controls] No mobile button found for "${key}" (tried: ${ids.join(', ')})`);
         continue;
       }
 
-      // touchstart / touchend for real mobile
-      el.addEventListener('touchstart', e => {
-        e.preventDefault();
-        input[key] = true;
-      }, { passive: false });
+      const press   = () => { input[key] = true;  };
+      const release = () => { input[key] = false; };
 
-      el.addEventListener('touchend', e => {
-        e.preventDefault();
-        input[key] = false;
-      }, { passive: false });
+      // FIX — touchcancel was missing. Without it, dragging a finger off the
+      // button left input[key] = true permanently, which caused the bike to
+      // accelerate (or brake) forever with no way to stop it from the UI.
+      el.addEventListener('touchstart',  e => { e.preventDefault(); press();   }, { passive: false });
+      el.addEventListener('touchend',    e => { e.preventDefault(); release(); }, { passive: false });
+      el.addEventListener('touchcancel', e => {                      release(); }, { passive: false });
 
-      el.addEventListener('touchcancel', e => {
-        input[key] = false;
-      }, { passive: false });
-
-      // mousedown / mouseup so buttons also work on desktop for testing
-      el.addEventListener('mousedown', () => { input[key] = true;  });
-      el.addEventListener('mouseup',   () => { input[key] = false; });
-      el.addEventListener('mouseleave',() => { input[key] = false; });
+      // Mouse fallback for desktop testing
+      el.addEventListener('mousedown',  press);
+      el.addEventListener('mouseup',    release);
+      el.addEventListener('mouseleave', release);
     }
   }
 
   /* ═══════════ CAMERA SHAKE ═══════════ */
   let shakeIntensity = 0;
-  const shakeDecay = 5;
+  const shakeDecay   = 5;
 
   Utils.on('cameraShake', ({ intensity }) => {
     shakeIntensity = Math.max(shakeIntensity, intensity);
@@ -191,11 +176,11 @@
     if (shakeIntensity < 0.001) return;
     camera.position.x += (Math.random() - 0.5) * shakeIntensity * 0.4;
     camera.position.y += (Math.random() - 0.5) * shakeIntensity * 0.2;
-    shakeIntensity -= shakeDecay * dt * shakeIntensity;
+    shakeIntensity    -= shakeDecay * dt * shakeIntensity;
   }
 
   /* ═══════════ GAME STATE ═══════════ */
-  let gameState = 'loading';  // loading | menu | racing | gameover
+  let gameState    = 'loading';
   const TOTAL_LAPS = 3;
 
   /* ═══════════ LOADING SEQUENCE ═══════════ */
@@ -218,10 +203,11 @@
       await new Promise(r => setTimeout(r, pct < 50 ? 180 : 220));
     }
     await new Promise(r => setTimeout(r, 400));
-    document.getElementById('loading-screen').style.opacity = '0';
-    document.getElementById('loading-screen').style.transition = 'opacity 0.5s';
+    const ls = document.getElementById('loading-screen');
+    ls.style.transition = 'opacity 0.5s';
+    ls.style.opacity    = '0';
     await new Promise(r => setTimeout(r, 500));
-    document.getElementById('loading-screen').style.display = 'none';
+    ls.style.display = 'none';
   }
 
   /* ═══════════ SCENE INIT ═══════════ */
@@ -247,12 +233,15 @@
     HUD.hideEngineBlown();
     HUD.show();
 
-    // Clear any stale input state so the bike doesn't start with phantom keys
+    // Clear any stale input from menus / previous race so the bike doesn't
+    // launch immediately with a "stuck" throttle or brake.
     input.throttle = false;
     input.brake    = false;
     input.left     = false;
     input.right    = false;
     input.nitro    = false;
+    // Also clear raw key state for the same reason.
+    for (const k of Object.keys(keys)) keys[k] = false;
 
     document.getElementById('main-menu').classList.add('hidden');
     document.getElementById('race-over-screen').classList.add('hidden');
@@ -268,24 +257,21 @@
     const elapsed = performance.now() - s.raceStartTime;
     const distKM  = (s.distanceTravelled / 1000).toFixed(2);
 
-    // Calculate earnings
     const baseEarning = finished ? 2000 : 800;
     const timeBonus   = Math.max(0, Math.floor(300000 / elapsed) * 10);
     const healthBonus = Math.floor(s.health * 5);
     const total       = baseEarning + timeBonus + healthBonus;
     Garage.addCash(total);
 
-    // Show race-over screen
-    const screen = document.getElementById('race-over-screen');
-    document.getElementById('race-over-title').textContent = finished ? 'RACE COMPLETE' : 'DNF';
-    document.getElementById('race-over-stats').innerHTML = `
+    document.getElementById('race-over-title').textContent  = finished ? 'RACE COMPLETE' : 'DNF';
+    document.getElementById('race-over-stats').innerHTML    = `
       <div>Time: <span class="stat-val">${Utils.formatTime(elapsed)}</span></div>
       <div>Distance: <span class="stat-val">${distKM} km</span></div>
       <div>Max Speed: <span class="stat-val">${Math.round(s.speed * 3.6)} km/h</span></div>
       <div>Laps: <span class="stat-val">${s.lapsCompleted} / ${TOTAL_LAPS}</span></div>
     `;
     document.getElementById('race-credits-earned').textContent = total.toLocaleString();
-    screen.classList.remove('hidden');
+    document.getElementById('race-over-screen').classList.remove('hidden');
   }
 
   /* ═══════════ UI WIRING ═══════════ */
@@ -298,7 +284,6 @@
     document.getElementById('btn-settings').addEventListener('click', () => {
       // Future: settings modal
     });
-
     document.getElementById('btn-goto-garage').addEventListener('click', () => {
       document.getElementById('race-over-screen').classList.add('hidden');
       Garage.show();
@@ -307,15 +292,12 @@
       document.getElementById('race-over-screen').classList.add('hidden');
       startRace();
     });
-
     document.getElementById('btn-blown-pit').addEventListener('click', () => {
       endRace(false);
     });
 
     Utils.on('garageToRace', startRace);
-    Utils.on('engineBlown', () => {
-      // HUD.js handles the blown overlay via the event
-    });
+    Utils.on('engineBlown', () => { /* HUD.js handles the overlay */ });
   }
 
   /* ═══════════ RACE LOOP LOGIC ═══════════ */
@@ -328,6 +310,7 @@
 
   /* ═══════════ MAIN LOOP ═══════════ */
   let lastTime = 0;
+
   function loop(now) {
     requestAnimationFrame(loop);
 
@@ -335,9 +318,10 @@
     lastTime = now;
 
     if (gameState === 'racing') {
-      // readInput() merges keyboard state into `input`.
-      // Mobile touch events already wrote their state into `input` directly,
-      // so the two sources are additive (OR), which is correct.
+      // Zero input each frame, then re-apply keyboard + live touch state.
+      // This is the cleanest way to combine polling (keyboard) with events
+      // (touch) without either source permanently "sticking".
+      clearKeyboardInput();
       readInput();
 
       Physics.step(dt);
@@ -378,13 +362,11 @@
 
   boot().catch(console.error);
 
-  // Expose for events
-  window._emitDamageParticles = function (pos) {
+  window._emitDamageParticles = pos => {
     Particles.sparks(pos, 50);
     Particles.smoke(pos, 40);
   };
 
-  // Hook damage events to particles
   Utils.on('damage', () => {
     const m = Bike.getMesh();
     if (m) {
