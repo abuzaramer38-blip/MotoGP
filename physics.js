@@ -102,22 +102,34 @@ const Physics = (() => {
 
   /* Create the bike rigid body */
   function createBikeBody(pos) {
+    if (!world) { console.error('Physics.createBikeBody: world not initialized'); return null; }
+
     const body = new CANNON.Body({ mass: 180, material: world._bikeMat });
 
-    // Single box collider sized to the visible chassis — simple and reliable
+    // Single box collider — simple, reliable, no compound edge-cases
     body.addShape(new CANNON.Box(new CANNON.Vec3(0.35, 0.35, 0.95)));
 
     body.position.set(pos.x, pos.y, pos.z);
 
-    // High damping keeps it planted
+    // Damping: linear keeps it planted, angular prevents tumbling
     body.linearDamping  = 0.6;
-    body.angularDamping = 0.9999;  // near-total rotational damping
+    body.angularDamping = 0.9999;
 
-    // CRITICAL: lock X and Z rotation axes completely — bike can NEVER flip or tip
-    body.angularFactor.set(0, 1, 0);  // only Y (yaw) is allowed to rotate
+    // Must add to world FIRST — angularFactor only exists as a live Vec3 after this
+    world.addBody(body);
+
+    // Now safe to mutate angularFactor: lock X and Z, allow only Y (yaw)
+    // In Cannon 0.6.2 angularFactor is a Vec3 on the body after addBody
+    if (body.angularFactor && typeof body.angularFactor.set === 'function') {
+      body.angularFactor.set(0, 1, 0);
+    } else {
+      // Fallback for Cannon versions where angularFactor isn't exposed:
+      // use fixedRotation + manual yaw-only in update()
+      body.fixedRotation = true;
+      body.updateMassProperties();
+    }
 
     body.allowSleep = false;
-    world.addBody(body);
     return body;
   }
 
