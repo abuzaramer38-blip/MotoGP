@@ -10,6 +10,7 @@
 </head>
 <body>
 
+  <!-- ─── LOADING SCREEN ─── -->
   <div id="loading-screen">
     <div class="loading-inner">
       <div class="loading-logo">MOTO<span>GP</span> EXTREME</div>
@@ -19,6 +20,7 @@
     </div>
   </div>
 
+  <!-- ─── MAIN MENU ─── -->
   <div id="main-menu" class="screen hidden">
     <div class="menu-bg-overlay"></div>
     <div class="menu-content">
@@ -35,18 +37,12 @@
     </div>
   </div>
 
+  <!-- ─── GARAGE SCREEN ─── -->
   <div id="garage-screen" class="screen hidden">
     <div class="garage-inner">
       <div class="garage-title">GARAGE &amp; PIT STOP</div>
       <div class="garage-cash-display">RACE CREDITS: <span id="garage-cash">0</span> CR</div>
       <div class="garage-grid">
-        <div class="garage-card">
-          <div class="garage-card-icon">🔧</div>
-          <div class="garage-card-label">REPAIR BIKE</div>
-          <div class="garage-card-desc">Restore full health to your machine</div>
-          <div class="garage-card-cost">500 CR</div>
-          <button class="btn-garage-action" id="btn-repair" data-cost="500">REPAIR</button>
-        </div>
         <div class="garage-card">
           <div class="garage-card-icon">⚡</div>
           <div class="garage-card-label">UPGRADE ENGINE</div>
@@ -77,6 +73,7 @@
     </div>
   </div>
 
+  <!-- ─── RACE OVER SCREEN ─── -->
   <div id="race-over-screen" class="screen hidden">
     <div class="raceover-inner">
       <div id="race-over-title">RACE COMPLETE</div>
@@ -89,9 +86,13 @@
     </div>
   </div>
 
+  <!-- ─── GAME CANVAS ─── -->
   <canvas id="game-canvas"></canvas>
 
+  <!-- ─── HUD ─── -->
   <div id="hud" class="hidden">
+
+    <!-- Speedometer cluster (bottom-left) -->
     <div class="hud-cluster hud-left">
       <canvas id="rpm-gauge" width="180" height="180"></canvas>
       <div class="hud-speed-readout">
@@ -104,6 +105,7 @@
       </div>
     </div>
 
+    <!-- Center top info bar -->
     <div class="hud-top-bar">
       <div class="hud-top-item">
         <div class="hud-top-label">LAP</div>
@@ -119,25 +121,16 @@
       </div>
     </div>
 
+    <!-- Nitro cluster (bottom-right) -->
     <div class="hud-cluster hud-right">
-      <div class="hud-health-label">BIKE HEALTH</div>
-      <div class="hud-health-bar-bg">
-        <div id="hud-health-bar"></div>
-      </div>
-      <div id="hud-health-pct">100%</div>
       <div class="hud-nitro-label">NITRO</div>
       <div class="hud-nitro-pips" id="hud-nitro-pips"></div>
     </div>
 
-    <div id="damage-flash"></div>
+    <!-- Nitro flare -->
     <div id="nitro-flare" class="hidden"></div>
 
-    <div id="engine-blown" class="hidden">
-      <div class="engine-blown-text">ENGINE BLOWN</div>
-      <div class="engine-blown-sub">Your bike has stopped. Head to the pit.</div>
-      <button class="btn-primary" id="btn-blown-pit">PIT STOP</button>
-    </div>
-
+    <!-- Mobile controls -->
     <div id="mobile-controls">
       <button class="mobile-btn" id="mob-left">◀</button>
       <button class="mobile-btn" id="mob-throttle">▲</button>
@@ -145,19 +138,26 @@
       <button class="mobile-btn" id="mob-right">▶</button>
       <button class="mobile-btn mobile-nitro" id="mob-nitro">N</button>
     </div>
+
   </div>
 
+  <!-- ─── SCRIPTS — all files at root, correct dependency order ─── -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
 
+  <!-- Shared helpers must be first -->
   <script src="utils.js"></script>
   <script src="physics.js"></script>
+  <!-- Track needs Physics; Particles/AI need THREE -->
   <script src="track.js"></script>
-  <script src="bike.js"></script>
-  <script src="ai.js"></script>
   <script src="particles.js"></script>
+  <script src="ai.js"></script>
+  <!-- HUD and Garage are pure UI, no inter-dependency -->
   <script src="hud.js"></script>
   <script src="garage.js"></script>
+  <!-- Bike needs Physics + Track constants -->
+  <script src="bike.js"></script>
+  <!-- main.js wires everything — must be absolutely last -->
   <script src="main.js"></script>
 </body>
 </html>
