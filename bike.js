@@ -157,11 +157,15 @@ const Bike = (() => {
   }
 
   function reset() {
-    // Remove old
-    if (mesh) scene.remove(mesh);
-    if (body) Physics.getWorld().remove(body);
+    // Safely remove previous mesh and physics body
+    if (mesh) { scene.remove(mesh); mesh = null; }
+    if (body) {
+      const w = Physics.getWorld();
+      if (w) w.remove(body);
+      body = null;
+    }
 
-    // Fresh state
+    // Reset state
     state.speed = 0;
     state.steer = 0;
     state.lean  = 0;
@@ -174,17 +178,24 @@ const Bike = (() => {
     state.lapsCompleted = 0;
     state.raceStartTime = performance.now();
 
+    // Build and place mesh
     const { group } = _buildMesh();
     mesh = group;
     mesh.position.set(0, CFG.groundY, -2);
     mesh.castShadow = true;
     scene.add(mesh);
 
+    // Build physics body — createBikeBody returns null if world isn't ready
     body = Physics.createBikeBody({ x: 0, y: CFG.groundY, z: -2 });
+    if (!body) {
+      console.error('Bike.reset: physics body creation failed — is Physics.init() called first?');
+    }
   }
 
   /* ─ Update (called every frame) ─ */
   function update(dt, input) {
+    if (!body || !mesh) return;   // safety: physics body not yet created
+
     const engineBoost = 1 + state.engineLevel * 0.15;
     const tireGrip    = 1 + state.tireLevel  * 0.12;
 
