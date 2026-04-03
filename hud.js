@@ -15,11 +15,9 @@ const HUD = (() => {
     _buildNitroPips();
 
     // Listen to game events
-    Utils.on('damage',      _onDamage);
     Utils.on('nitroStart',  _onNitroStart);
     Utils.on('nitroEnd',    _onNitroEnd);
     Utils.on('lapComplete', _onLapComplete);
-    Utils.on('engineBlown', _onEngineBlown);
   }
 
   function show()  { document.getElementById('hud').classList.remove('hidden'); }
@@ -48,18 +46,6 @@ const HUD = (() => {
     // Lap time
     const elapsed = performance.now() - state.raceStartTime;
     document.getElementById('hud-laptime').textContent = Utils.formatTime(elapsed);
-
-    // Health bar
-    const hpct = Utils.clamp(state.health / 100, 0, 1);
-    const hBar  = document.getElementById('hud-health-bar');
-    const hPct  = document.getElementById('hud-health-pct');
-    hBar.style.width = `${hpct * 100}%`;
-    hPct.textContent = `${Math.round(state.health)}%`;
-    hBar.style.background = hpct > 0.5
-      ? 'linear-gradient(90deg,#22c55e,#84cc16)'
-      : hpct > 0.25
-        ? 'linear-gradient(90deg,#f59e0b,#f97316)'
-        : 'linear-gradient(90deg,#ef4444,#dc2626)';
 
     // Nitro pips
     const pips = document.querySelectorAll('.nitro-pip');
@@ -142,16 +128,6 @@ const HUD = (() => {
     c.fillText('RPM', cx, cy + 28);
   }
 
-  function _onDamage({ health, amount }) {
-    const flash = document.getElementById('damage-flash');
-    flash.classList.remove('active');
-    void flash.offsetWidth;
-    flash.classList.add('active');
-
-    // Bump camera (visual shake handled in main.js)
-    Utils.emit('cameraShake', { intensity: amount / 20 });
-  }
-
   function _onNitroStart() {
     document.getElementById('nitro-flare').classList.remove('hidden');
   }
@@ -163,15 +139,7 @@ const HUD = (() => {
     document.getElementById('hud-lap').textContent = `${lap} / ${totalLaps}`;
   }
 
-  function _onEngineBlown() {
-    document.getElementById('engine-blown').classList.remove('hidden');
-  }
-
-  function hideEngineBlown() {
-    document.getElementById('engine-blown').classList.add('hidden');
-  }
-
   function setTotalLaps(n) { totalLaps = n; }
 
-  return { init, show, hide, update, hideEngineBlown, setTotalLaps };
+  return { init, show, hide, update, setTotalLaps };
 })();
