@@ -130,13 +130,22 @@
     <!-- Nitro flare -->
     <div id="nitro-flare" class="hidden"></div>
 
-    <!-- Mobile controls -->
+    <!-- Mobile controls — three thumb clusters -->
     <div id="mobile-controls">
-      <button class="mobile-btn" id="mob-left">◀</button>
-      <button class="mobile-btn" id="mob-throttle">▲</button>
-      <button class="mobile-btn" id="mob-brake">▼</button>
-      <button class="mobile-btn" id="mob-right">▶</button>
-      <button class="mobile-btn mobile-nitro" id="mob-nitro">N</button>
+      <!-- Left thumb: steer left + brake -->
+      <div class="mob-cluster-left">
+        <button class="mobile-btn" id="mob-left" aria-label="Steer Left">◀</button>
+        <button class="mobile-btn" id="mob-brake" aria-label="Brake">▼</button>
+      </div>
+      <!-- Centre thumb: nitro -->
+      <div class="mob-cluster-centre">
+        <button class="mobile-btn mobile-nitro" id="mob-nitro" aria-label="Nitro">NITRO</button>
+      </div>
+      <!-- Right thumb: throttle + steer right -->
+      <div class="mob-cluster-right">
+        <button class="mobile-btn" id="mob-throttle" aria-label="Throttle">▲</button>
+        <button class="mobile-btn" id="mob-right" aria-label="Steer Right">▶</button>
+      </div>
     </div>
 
   </div>
