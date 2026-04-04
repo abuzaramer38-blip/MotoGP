@@ -543,38 +543,106 @@ html, body {
 /* ─ Mobile Controls ─ */
 #mobile-controls {
   position: absolute;
-  bottom: 20px;
-  left: 50%; transform: translateX(-50%);
+  bottom: 0;
+  left: 0; right: 0;
   display: none;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 16px 20px;
   pointer-events: all;
+  /* Prevent the entire control strip from triggering browser gestures */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
+
+/* Left cluster: steer-left + brake */
+.mob-cluster-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Right cluster: steer-right + throttle */
+.mob-cluster-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Centre cluster: nitro */
+.mob-cluster-centre {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 4px;
+}
+
 .mobile-btn {
-  width: 64px; height: 64px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15);
+  /* Larger touch target — 80 px minimum for thumb accuracy */
+  width: 80px; height: 80px;
+  background: rgba(20, 20, 30, 0.75);
+  border: 2px solid rgba(255,255,255,0.18);
   border-radius: 50%;
   color: #fff;
-  font-size: 1.4rem;
+  font-size: 1.7rem;
   cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
   display: flex; align-items: center; justify-content: center;
-  transition: background 0.1s;
+  /* Kill ALL browser touch behaviours on the button itself */
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;   /* no long-press context menu on iOS */
+  user-select: none;
+  transition: background 0.08s, transform 0.08s;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
-.mobile-btn:active { background: rgba(232,56,58,0.3); }
+
+/* Active / pressed state — instant feedback */
+.mobile-btn:active,
+.mobile-btn.pressed {
+  background: rgba(232, 56, 58, 0.45);
+  transform: scale(0.92);
+  border-color: var(--c-accent);
+}
+
+/* Throttle — green tint */
+#mob-throttle {
+  background: rgba(20, 60, 20, 0.75);
+  border-color: rgba(34, 197, 94, 0.4);
+}
+#mob-throttle:active { background: rgba(34, 197, 94, 0.45); }
+
+/* Brake — red tint */
+#mob-brake {
+  background: rgba(60, 10, 10, 0.75);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+#mob-brake:active { background: rgba(239, 68, 68, 0.45); }
+
+/* Nitro — blue accent, larger */
 .mobile-nitro {
-  background: rgba(59,130,246,0.2);
-  border-color: rgba(59,130,246,0.4);
+  width: 90px; height: 90px;
+  font-size: 1.0rem;
   font-family: var(--font-hud);
   font-weight: 700;
+  letter-spacing: 0.15em;
+  background: rgba(10, 20, 70, 0.80);
+  border-color: rgba(59, 130, 246, 0.55);
+  box-shadow: 0 0 20px rgba(59,130,246,0.25), 0 4px 20px rgba(0,0,0,0.5);
 }
+.mobile-nitro:active { background: rgba(59,130,246,0.45); }
 
 @media (max-width: 768px) {
   #mobile-controls { display: flex; }
   .hud-top-bar { min-width: 95vw; }
   #hud-speed { font-size: 2rem; }
-  .hud-health-bar-bg { width: 120px; }
+  /* Shrink slightly on very small phones */
+  @media (max-width: 380px) {
+    .mobile-btn { width: 68px; height: 68px; font-size: 1.4rem; }
+    .mobile-nitro { width: 76px; height: 76px; }
+  }
 }
 
 /* ─ RPM Gauge Canvas ─ */
