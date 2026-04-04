@@ -15,20 +15,20 @@ const Physics = (() => {
 
   function init() {
     world = new CANNON.World();
-    world.gravity.set(0, -20, 0);           // strong gravity for feel
+    world.gravity.set(0, -18, 0);           // slightly less than -20: stops bounce
     world.broadphase = new CANNON.SAPBroadphase(world);
     world.solver.iterations = 20;
-    world.defaultContactMaterial.friction = 0.4;
-    world.defaultContactMaterial.restitution = 0.1;
+    world.defaultContactMaterial.friction    = 0.6;   // was 0.4 — stops lateral sliding
+    world.defaultContactMaterial.restitution = 0.0;   // was 0.1 — zero bounce on default contact
 
     // Ground contact material
     const groundMat = new CANNON.Material('ground');
     const bikeMat   = new CANNON.Material('bike');
     const cm = new CANNON.ContactMaterial(groundMat, bikeMat, {
-      friction: 0.6,
-      restitution: 0.05,
-      contactEquationStiffness: 1e8,
-      contactEquationRelaxation: 3,
+      friction:                    0.85,  // high grip — no ice sliding
+      restitution:                 0.00,  // no bounce off ground at all
+      contactEquationStiffness:    1e8,
+      contactEquationRelaxation:   4,     // slightly softer = smoother contact
     });
     world.addContactMaterial(cm);
     world._groundMat = groundMat;
@@ -36,8 +36,8 @@ const Physics = (() => {
 
     const barrierMat = new CANNON.Material('barrier');
     const bcm = new CANNON.ContactMaterial(barrierMat, bikeMat, {
-      friction: 0.3,
-      restitution: 0.2,
+      friction:    0.3,
+      restitution: 0.1,
       contactEquationStiffness: 1e9,
     });
     world.addContactMaterial(bcm);
