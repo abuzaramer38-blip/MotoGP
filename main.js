@@ -198,6 +198,9 @@
     AI.spawnRivals(4);
     Particles.reset();
     HUD.show();
+    // mobile-controls is now a body sibling of #hud — show it explicitly
+    const mob = document.getElementById('mobile-controls');
+    if (mob) mob.classList.add('visible');
 
     document.getElementById('main-menu').classList.add('hidden');
     document.getElementById('race-over-screen').classList.add('hidden');
@@ -208,6 +211,8 @@
   function endRace(finished) {
     gameState = 'gameover';
     HUD.hide();
+    const mob = document.getElementById('mobile-controls');
+    if (mob) mob.classList.remove('visible');
 
     const s       = Bike.getState();
     const elapsed = performance.now() - s.raceStartTime;
@@ -277,6 +282,10 @@
       Physics.step(dt);
       Bike.update(dt, input);
       AI.update(dt);
+
+      // ── Stream road tiles ahead of the bike ──
+      const bikeMesh = Bike.getMesh();
+      if (bikeMesh) Track.update(bikeMesh.position.z);
 
       const s = Bike.getState();
       Particles.updateExhaust(
