@@ -100,20 +100,50 @@
     input.nitro    = keys['Space'];
   }
 
-  // Mobile controls
+  // Mobile controls — belt-and-suspenders: both Pointer Events and Touch Events
   function setupMobileControls() {
-    const btns = {
-      'mob-throttle': ['throttle'],
-      'mob-brake':    ['brake'],
-      'mob-left':     ['left'],
-      'mob-right':    ['right'],
-      'mob-nitro':    ['nitro'],
+    const map = {
+      'mob-throttle': 'throttle',
+      'mob-brake':    'brake',
+      'mob-left':     'left',
+      'mob-right':    'right',
+      'mob-nitro':    'nitro',
     };
-    for (const [id, actions] of Object.entries(btns)) {
+
+    for (const [id, action] of Object.entries(map)) {
       const btn = document.getElementById(id);
-      if (!btn) continue;
-      btn.addEventListener('touchstart', e => { e.preventDefault(); actions.forEach(a => { input[a] = true; }); }, { passive: false });
-      btn.addEventListener('touchend',   e => { e.preventDefault(); actions.forEach(a => { input[a] = false; }); }, { passive: false });
+      if (!btn) { console.warn('Mobile button not found:', id); continue; }
+
+      // ── Pointer Events (works on all modern browsers incl. iOS 13+) ──
+      btn.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        input[action] = true;
+        btn.setPointerCapture(e.pointerId);   // keep firing even if finger slides off
+      }, { passive: false });
+
+      btn.addEventListener('pointerup', e => {
+        e.preventDefault();
+        input[action] = false;
+      }, { passive: false });
+
+      btn.addEventListener('pointercancel', e => {
+        input[action] = false;               // finger lifted by OS (call, notification…)
+      });
+
+      // ── Touch Events fallback (older Android WebViews) ──
+      btn.addEventListener('touchstart', e => {
+        e.preventDefault();                  // prevents 300 ms click delay + zoom
+        input[action] = true;
+      }, { passive: false });
+
+      btn.addEventListener('touchend', e => {
+        e.preventDefault();
+        input[action] = false;
+      }, { passive: false });
+
+      btn.addEventListener('touchcancel', e => {
+        input[action] = false;
+      }, { passive: false });
     }
   }
 
