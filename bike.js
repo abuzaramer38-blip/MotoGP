@@ -14,12 +14,13 @@ const Bike = (() => {
     acceleration:   28,
     brakeForce:     55,
     // Steering: base rate scales DOWN at high speed (speed-sensitive)
-    steerSpeedLow:  2.2,   // max yaw rate at low speed
-    steerSpeedHigh: 0.9,   // max yaw rate at top speed
-    steerReturn:    5.0,   // how fast steering self-centres
-    // Lean: smoothed with two-stage interpolation
-    leanMax:        0.42,  // max lean angle (radians)
-    leanSmooth:     6.0,   // lean interpolation speed
+    steerSpeedLow:  2.4,   // max yaw rate at low speed  (was 2.2)
+    steerSpeedHigh: 0.85,  // max yaw rate at top speed  (was 0.9)
+    steerReturn:    4.2,   // self-centring speed         (was 5.0)
+    // Lean: spring-damper — higher stiffness = crisper, not sluggish
+    leanMax:        0.38,  // max lean (radians) ~22°
+    leanSmooth:     12.0,  // spring constant (was 6 — too slow)
+    // leanDamp is computed as 2*sqrt(leanSmooth) ≈ 6.93 → critically damped
     groundY:        1.0,   // spawn/ride height
     nitroMult:      1.6,
     nitroDuration:  3.0,
